@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MushaAltSpaceIme.Core/MushaAltSpaceIme.Core.csproj" />
+    <Project Path="src/MushaAltSpaceIme/MushaAltSpaceIme.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MushaAltSpaceIme.Core.Tests/MushaAltSpaceIme.Core.Tests.csproj" />
+  </Folder>
+</Solution>
