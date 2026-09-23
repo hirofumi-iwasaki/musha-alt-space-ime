@@ -21,6 +21,13 @@ internal readonly record struct ToggleShortcut(InputTarget Target, ushort Virtua
 
 internal sealed class ShortcutSender
 {
+    private readonly Func<NativeMethods.Input[], uint> _send;
+    private bool _altDown;
+    private KeyEvent[] _pendingRecovery = [];
+
+    internal ShortcutSender(Func<NativeMethods.Input[], uint>? send = null) =>
+        _send = send ?? (inputs => NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.Input>()));
+
     internal static ToggleShortcut? Resolve(InputTarget? target)
     {
         if (target is not { } value || value.Layout == 0) return null;
@@ -50,7 +57,8 @@ internal sealed class ShortcutSender
     {
         if (events.Count == 0) return true;
         NativeMethods.Input[] inputs = events.Select(ToNative).ToArray();
-        uint sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.Input>());
+        uint sent = _send(inputs);
+        TrackAlt(events, sent);
         if (sent == inputs.Length) return true;
 
         // Only recover presses accepted in this incomplete batch; never retry a toggle.
@@ -61,11 +69,34 @@ internal sealed class ShortcutSender
             if (key.IsUp) held.Remove(key.VirtualKey);
             else held[key.VirtualKey] = key;
         }
-        NativeMethods.Input[] releases = held.Values.Reverse()
-            .Select(key => ToNative(key with { IsUp = true })).ToArray();
+        KeyEvent[] releases = held.Values.Reverse().Select(key => key with { IsUp = true }).ToArray();
         if (releases.Length > 0)
-            NativeMethods.SendInput((uint)releases.Length, releases, Marshal.SizeOf<NativeMethods.Input>());
+        {
+            uint recovered = _send(releases.Select(ToNative).ToArray());
+            TrackAlt(releases, recovered);
+            _pendingRecovery = releases.Skip((int)recovered).ToArray();
+        }
         return false;
+    }
+
+    // Failed batches may already have recovered Alt. Do not inject a second
+    // Alt-up when the state machine subsequently asks to clean up its replay.
+    internal bool ReleaseAlt(IReadOnlyList<KeyEvent> releases)
+    {
+        if (_pendingRecovery.Length > 0)
+        {
+            uint recovered = _send(_pendingRecovery.Select(ToNative).ToArray());
+            TrackAlt(_pendingRecovery, recovered);
+            _pendingRecovery = _pendingRecovery.Skip((int)recovered).ToArray();
+            if (_pendingRecovery.Length > 0) return false;
+        }
+        return !_altDown || Send(releases.Count > 0 ? releases : [new KeyEvent(0xA4, 0x38, true, false)]);
+    }
+
+    private void TrackAlt(IReadOnlyList<KeyEvent> events, uint sent)
+    {
+        for (int i = 0; i < Math.Min(sent, (uint)events.Count); i++)
+            if (events[i].VirtualKey == 0xA4) _altDown = !events[i].IsUp;
     }
 
     internal bool SendPointer(IReadOnlyList<KeyEvent> prefix, NativeMethods.MouseData data, uint flags)
@@ -93,7 +124,8 @@ internal sealed class ShortcutSender
                 }
             }
         };
-        uint sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.Input>());
+        uint sent = _send(inputs);
+        TrackAlt(prefix, sent);
         if (sent == inputs.Length) return true;
         if (sent > 0)
             Send(prefix.Take((int)Math.Min(sent, (uint)prefix.Count)).Reverse()

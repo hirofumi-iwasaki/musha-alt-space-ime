@@ -8,5 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/MushaAltSpaceIme.Core/MushaAltSpaceIme.Core.csproj" />
     <Compile Include="../../src/MushaAltSpaceIme/NativeMethods.cs" Link="NativeMethods.cs" />
+    <Compile Include="../../src/MushaAltSpaceIme/ShortcutSender.cs" Link="ShortcutSender.cs" />
   </ItemGroup>
 </Project>

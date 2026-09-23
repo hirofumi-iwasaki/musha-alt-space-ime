@@ -18,6 +18,11 @@ var tests = new (string Name, Action Run)[]
     ("pointer promotion replays the withheld Alt once", PointerPromotionReplaysAltOnce),
     ("preheld modifier and Space do not toggle", PreheldKeysDoNotToggle),
     ("native interop declarations match the Windows ABI", NativeLayoutMatchesWindowsAbi),
+    ("partial sender recovery avoids duplicate Alt release", PartialSenderRecoveryAvoidsDuplicateAltRelease),
+    ("zero-accepted sender batch needs no release", ZeroAcceptedSenderBatchNeedsNoRelease),
+    ("failed recovery retries only Alt release", FailedRecoveryRetriesOnlyAltRelease),
+    ("partial toggle recovery never repeats grave", PartialToggleRecoveryNeverRepeatsGrave),
+    ("failed two-key recovery retries grave and Alt once", FailedTwoKeyRecoveryRetriesGraveAndAltOnce),
     ("state machine sequence invariants", StateMachineSequenceInvariants),
 };
 
@@ -38,6 +43,8 @@ return 0;
 
 static KeyEvent Down(ushort key) => new(key, key, false, false);
 static KeyEvent Up(ushort key) => new(key, key, true, false);
+static KeyEvent AltDown() => new(AltKeyStateMachine.VK_LMENU, 0x38, false, false);
+static KeyEvent AltUp() => new(AltKeyStateMachine.VK_LMENU, 0x38, true, false);
 static InputDecision Send(AltKeyStateMachine machine, KeyEvent input, bool canToggle = true) => machine.Process(input, canToggle);
 static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 static void Events(IReadOnlyList<KeyEvent> actual, params KeyEvent[] expected) => Check(actual.SequenceEqual(expected), "unexpected replay sequence");
@@ -228,6 +235,97 @@ static void NativeLayoutMatchesWindowsAbi()
     var actualInputDataOffset = Marshal.OffsetOf<NativeMethods.Input>(nameof(NativeMethods.Input.Data)).ToInt32();
     Check(actualInputDataOffset == expectedInputDataOffset,
         $"INPUT.Data must begin at {expectedInputDataOffset}, but begins at {actualInputDataOffset}");
+}
+
+static void PartialSenderRecoveryAvoidsDuplicateAltRelease()
+{
+    var batches = new List<NativeMethods.Input[]>();
+    var accepted = new Queue<uint>([1, 1]);
+    var sender = new ShortcutSender(inputs => { batches.Add(inputs); return accepted.Dequeue(); });
+
+    Check(!sender.Send([AltDown(), Down(0x09)]), "partial batch must report failure");
+    Check(sender.ReleaseAlt([AltUp()]), "already-recovered Alt release must succeed");
+
+    Check(batches.Count == 2, "recovery must avoid a duplicate Alt-up after the core cleanup");
+    AssertOnlyAltUp(batches[1]);
+}
+
+static void ZeroAcceptedSenderBatchNeedsNoRelease()
+{
+    var batches = new List<NativeMethods.Input[]>();
+    var sender = new ShortcutSender(inputs => { batches.Add(inputs); return 0; });
+
+    Check(!sender.Send([AltDown()]), "zero accepted inputs must report failure");
+    Check(sender.ReleaseAlt(Array.Empty<KeyEvent>()), "no accepted Alt must need no cleanup");
+    Check(batches.Count == 1, "zero accepted inputs must not cause a spurious Alt-up");
+}
+
+static void FailedRecoveryRetriesOnlyAltRelease()
+{
+    var batches = new List<NativeMethods.Input[]>();
+    var accepted = new Queue<uint>([1, 0, 1]);
+    var sender = new ShortcutSender(inputs => { batches.Add(inputs); return accepted.Dequeue(); });
+
+    Check(!sender.Send([AltDown(), Down(0x09)]), "partial batch must report failure");
+    Check(sender.ReleaseAlt(Array.Empty<KeyEvent>()), "a still-held accepted Alt must be retried");
+
+    Check(batches.Count == 3, "failed recovery requires one final Alt-up attempt");
+    AssertOnlyAltUp(batches[1]);
+    AssertOnlyAltUp(batches[2]);
+}
+
+static void PartialToggleRecoveryNeverRepeatsGrave()
+{
+    var batches = new List<NativeMethods.Input[]>();
+    var accepted = new Queue<uint>([3, 1]);
+    var sender = new ShortcutSender(inputs => { batches.Add(inputs); return accepted.Dequeue(); });
+    var grave = new KeyEvent(0xC0, 0x29, false, false);
+
+    Check(!sender.Send([
+        AltDown(), grave, grave with { IsUp = true }, AltUp()
+    ]), "partial toggle batch must report failure");
+    Check(sender.ReleaseAlt(Array.Empty<KeyEvent>()), "successful recovery leaves no extra cleanup to send");
+
+    Check(batches.Count == 2, "partial toggle must have one recovery batch only");
+    AssertOnlyAltUp(batches[1]);
+    Check(!batches.Skip(1).SelectMany(batch => batch).Any(IsGrave), "recovery must never repeat the grave key");
+}
+
+static void FailedTwoKeyRecoveryRetriesGraveAndAltOnce()
+{
+    var batches = new List<NativeMethods.Input[]>();
+    var accepted = new Queue<uint>([2, 0, 2]);
+    var sender = new ShortcutSender(inputs => { batches.Add(inputs); return accepted.Dequeue(); });
+    var grave = new KeyEvent(0xC0, 0x29, false, false);
+
+    Check(!sender.Send([AltDown(), grave, grave with { IsUp = true }, AltUp()]),
+        "partial toggle batch must report failure");
+    Check(sender.ReleaseAlt(Array.Empty<KeyEvent>()), "pending recovery releases must be retried");
+    Check(sender.ReleaseAlt(Array.Empty<KeyEvent>()), "completed pending recovery must not repeat releases");
+
+    Check(batches.Count == 3, "the pending two-key recovery must be sent once");
+    AssertGraveThenAltUp(batches[2]);
+}
+
+static void AssertOnlyAltUp(NativeMethods.Input[] inputs)
+{
+    Check(inputs.Length == 1, "recovery must send exactly one event");
+    var key = inputs[0].Data.Keyboard;
+    Check(key.ScanCode == 0x38 && (key.Flags & NativeMethods.KeyEventUp) != 0,
+        $"recovery must send only an Alt key-up (scan={key.ScanCode:X}, flags={key.Flags:X})");
+}
+
+static bool IsGrave(NativeMethods.Input input) => input.Data.Keyboard.ScanCode == 0x29;
+
+static void AssertGraveThenAltUp(NativeMethods.Input[] inputs)
+{
+    Check(inputs.Length == 2, "two held keys require exactly two recovery releases");
+    var grave = inputs[0].Data.Keyboard;
+    var alt = inputs[1].Data.Keyboard;
+    Check(grave.ScanCode == 0x29 && (grave.Flags & NativeMethods.KeyEventUp) != 0,
+        "the pending grave release must be first");
+    Check(alt.ScanCode == 0x38 && (alt.Flags & NativeMethods.KeyEventUp) != 0,
+        "the pending Alt release must be second");
 }
 
 static void StateMachineSequenceInvariants()

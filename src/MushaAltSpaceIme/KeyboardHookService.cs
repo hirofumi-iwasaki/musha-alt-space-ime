@@ -104,7 +104,7 @@ public sealed class KeyboardHookService : IDisposable
         }
         finally
         {
-            _sender.Send(_machine.SetEnabled(false));
+            _sender.ReleaseAlt(_machine.SetEnabled(false));
             if (_hook != 0) NativeMethods.UnhookWindowsHookEx(_hook);
             if (_mouseHook != 0) NativeMethods.UnhookWindowsHookEx(_mouseHook);
             _hook = 0;
@@ -156,14 +156,14 @@ public sealed class KeyboardHookService : IDisposable
             // Replace both in one SendInput batch and suppress the original event.
             if (!_sender.SendPointer(prefix, data, flags))
             {
-                _sender.Send(_machine.SetEnabled(false));
+                _sender.ReleaseAlt(_machine.SetEnabled(false));
                 ReportFault("Altとマウスの入力を送信できなかったため一時停止しました。");
             }
             return 1;
         }
         catch
         {
-            _sender.Send(_machine.SetEnabled(false));
+            _sender.ReleaseAlt(_machine.SetEnabled(false));
             ReportFault("マウス入力処理でエラーが発生したため一時停止しました。");
             return NativeMethods.CallNextHookEx(_mouseHook, code, wParam, lParam);
         }
@@ -194,7 +194,7 @@ public sealed class KeyboardHookService : IDisposable
                 : _sender.Send(decision.Replay);
             if (!success)
             {
-                _sender.Send(_machine.SetEnabled(false));
+                _sender.ReleaseAlt(_machine.SetEnabled(false));
                 ReportFault("キー入力を送信できなかったため一時停止しました。入力先の権限やフォーカスを確認し、再開してください。");
             }
             else if (shortcut is null && target is { } unsupported && decision.Replay.Count > 0
@@ -206,7 +206,7 @@ public sealed class KeyboardHookService : IDisposable
         }
         catch
         {
-            _sender.Send(_machine.SetEnabled(false));
+            _sender.ReleaseAlt(_machine.SetEnabled(false));
             ReportFault("入力処理でエラーが発生したため一時停止しました。");
             return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
         }
@@ -214,7 +214,7 @@ public sealed class KeyboardHookService : IDisposable
 
     private bool Cleanup(IReadOnlyList<KeyEvent> releases)
     {
-        if (_sender.Send(releases)) return true;
+        if (_sender.ReleaseAlt(releases)) return true;
         _machine.SetEnabled(false);
         ReportFault("キー状態の復元に失敗したため一時停止しました。Altキーを押して離してから再開してください。");
         return false;

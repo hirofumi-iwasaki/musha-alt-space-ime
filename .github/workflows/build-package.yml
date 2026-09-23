@@ -15,10 +15,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -30,7 +30,7 @@ jobs:
         run: ./tool/build-package.ps1 -Configuration Release -OutputDirectory artifacts
 
       - name: Upload Windows x64 package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: musha-alt-space-ime-windows-x64
           path: |
