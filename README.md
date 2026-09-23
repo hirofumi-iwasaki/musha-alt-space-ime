@@ -6,6 +6,8 @@ Windows 11 向けの小さな通知領域常駐アプリです。左 Alt + Space
 
 0.1.0 は試作版です。macOS 上でのビルドと自動テストは、Windows の入力フック、通知領域 UI、ATOK、Microsoft IME の実行時動作を証明しません。Windows 11 実機での検証記録がそろうまで、対応環境を保証しません。
 
+20件の自動テストとWindows上のビルド・ZIP作成は成功しています。[動作確認用パッケージ](https://github.com/hirofumi-iwasaki/musha-alt-space-ime/actions/runs/35805415748/artifacts/10727413086)（GitHubへのログインが必要な場合があります）をダウンロードできます。Actions成果物のため保存期限があります。
+
 特に ATOK とキーボード配列（US / JIS）の組み合わせは未検証です。配列に適したバッククォートのキー操作を決められない場合、アプリは Alt + Space を変換せず元の操作を維持します。別のキーへ黙って置き換えることはしません。
 
 - [設計書](.chatgpt/DESIGN.md)

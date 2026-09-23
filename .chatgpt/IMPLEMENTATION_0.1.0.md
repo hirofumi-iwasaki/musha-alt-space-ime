@@ -31,7 +31,7 @@
 | macOS 上でのWindows向けコンパイル | 成功 | `dotnet build MushaAltSpaceIme.slnx -c Release`、警告0・エラー0 |
 | Windows x64ランタイム同梱の発行 | 成功 | `dotnet publish src/MushaAltSpaceIme/MushaAltSpaceIme.csproj -c Release -r win-x64 --self-contained true` |
 | Windows 11 上での復元・コアテスト | 保留 | Windows ビルド、SDK、実行コマンド、結果 |
-| Windows CI上のテストと自己完結 ZIP の作成 | 初回成功・最終修正の再確認待ち | [Actions #1](https://github.com/hirofumi-iwasaki/musha-alt-space-ime/actions/runs/35804980048)、ソース`ed60cf8`、`musha-alt-space-ime-windows-x64.zip` |
+| Windows CI上のテストと自己完結 ZIP の作成 | 成功 | [Actions #2](https://github.com/hirofumi-iwasaki/musha-alt-space-ime/actions/runs/35805415748)、ソース`2f08b02093645c6fb8429ff45195e8294e9c9731`、20件のテストと`musha-alt-space-ime-windows-x64.zip`生成、ジョブ所要1分50秒 |
 | Windows 11 での起動・通知領域 UI | 保留 | Windows ビルド、実行結果 |
 | Microsoft 日本語 IME | 保留 | IME のバージョン、設定、入力先、手動 Alt + バッククォートとの比較 |
 | ATOK for Windows | 保留 | ATOK のバージョン、設定、入力先、手動 Alt + バッククォートとの比較 |
@@ -44,6 +44,8 @@
 | ログオン時起動、多重起動、スリープ/ロック復帰、Explorer 再起動 | 保留 | 再現手順、結果 |
 
 ## 手動 Windows 実機テスト表
+
+試作パッケージは[Actions #2の成果物](https://github.com/hirofumi-iwasaki/musha-alt-space-ime/actions/runs/35805415748/artifacts/10727413086)から取得できる。成果物内のZIPと同名の`.sha256`で検証する。GitHub表示の成果物ダイジェストは外側のartifactに対するものであり、内側の配布ZIPのSHA-256とは区別する。以後の検証記録だけの更新では実行ファイルは変更しない。
 
 手動 Alt + バッククォートを同じ入力先・同じ IME 状態で先に実行し、それと比較します。IME の ON/OFF を直接操作することや、IME 間・言語間を巡回することは合格条件に含めません。
 
